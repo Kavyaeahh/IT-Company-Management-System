@@ -1,0 +1,169 @@
+Write a block in PL/SQL to print a report which shows that, the employee id, name, hire date, and the incentive amount they achieved according to their working experiences, who joined in the month of current date
+
+DECLARE
+    emp_id        employees.employee_id%TYPE;
+    emp_hiredate  employees.hire_date%TYPE;
+    emp_firstname employees.first_name%TYPE;
+    emp_lastname  employees.last_name%TYPE;
+    no_of_emp     NUMBER;
+    inctv_amount  NUMBER;
+    work_exp      NUMBER;
+    CURSOR emp_cur (
+      thismonth NUMBER)IS
+      SELECT employee_id,
+             first_name,
+             last_name,
+             hire_date
+      FROM   employees
+      WHERE  Extract(month FROM hire_date) = thismonth;
+BEGIN
+    OPEN emp_cur(Extract(month FROM SYSDATE));
+    dbms_output.Put_line('Date: '
+                         || To_char(SYSDATE, 'DL'));
+    dbms_output.Put_line('Employees with yearly incentive amounts:');
+    dbms_output.Put_line('------------------------------------------');
+    dbms_output.Put_line(Rpad('Employee ID', 15)
+                         || Rpad('Name of the Employee', 30)
+                         || Rpad('Hire Date', 15)
+                         || 'Incentive Amount');
+dbms_output.Put_line('------------------------------------------------------------------------------');
+LOOP
+    FETCH emp_cur INTO emp_id, emp_firstname, emp_lastname, emp_hiredate;
+    EXIT WHEN emp_cur%NOTFOUND;
+    work_exp := Round(( Months_between(SYSDATE, emp_hiredate) / 12 ));
+    IF work_exp > 13 THEN
+      inctv_amount := 8000;
+    ELSIF work_exp > 11 THEN
+      inctv_amount := 5000;
+    ELSIF work_exp > 9 THEN
+      inctv_amount := 3000;
+    ELSIF work_exp > 7 THEN
+      inctv_amount := 2000;
+    ELSIF work_exp > 4 THEN
+      inctv_amount := 1000;
+    ELSIF work_exp > 0 THEN
+      inctv_amount := 400;
+    END IF;
+    dbms_output.Put_line(Rpad(emp_id, 15)
+                         ||Rpad(( emp_firstname
+                                  ||' '
+                                  ||emp_lastname ), 30)
+                         ||Rpad(emp_hiredate, 15)
+                         || To_char(inctv_amount, '9,999'));
+END LOOP;
+
+no_of_emp := emp_cur%rowcount;
+
+dbms_output.Put_line('The number of rows fetched is '
+                     || no_of_emp);
+CLOSE emp_cur;
+END;
+
+/ 
+--------------------------------------------------------------------------
+
+count no.of emp and select details
+
+DECLARE
+    CURSOR cur_for_dep IS
+      SELECT *
+      FROM   departments
+      WHERE  manager_id IS NOT NULL;
+    FUNCTION Count_for_emp (p_deptid NUMBER)
+    RETURN NUMBER
+    IS
+      count_of_emp NUMBER(3);
+    BEGIN
+        SELECT Count(*)
+        INTO   count_of_emp
+        FROM   employees
+        WHERE  department_id = p_deptid;
+
+        RETURN count_of_emp;
+    END;
+    FUNCTION Name_of_hod (p_deptid NUMBER)
+    RETURN VARCHAR2
+    IS
+      emp_as_hod employees.first_name%TYPE;
+    BEGIN
+        SELECT first_name
+        INTO   emp_as_hod
+        FROM   employees
+        WHERE  employee_id = (SELECT manager_id
+                              FROM   departments
+                              WHERE  department_id = p_deptid);
+
+        RETURN emp_as_hod;
+    END;
+    FUNCTION City_of_dep (p_deptid NUMBER)
+    RETURN VARCHAR2
+    IS
+      city_head_off locations.city%TYPE;
+    BEGIN
+        SELECT city
+        INTO   city_head_off
+        FROM   locations
+        WHERE  location_id = (SELECT location_id
+                              FROM   departments
+                              WHERE  department_id = p_deptid);
+
+        RETURN city_head_off;
+    END;
+BEGIN
+    dbms_output.Put_line(Rpad('Department Name', 30)
+                         ||Rpad('Department Head', 20)
+                         ||Rpad('Head Office', 20)
+                         ||'Number of Employees');
+
+dbms_output.Put_line('----------------------------------------------------------------------------------------');
+
+FOR rows_of_dep IN cur_for_dep LOOP
+    dbms_output.Put_line(Rpad(rows_of_dep.department_name, 30)
+                         || Rpad(Name_of_hod(rows_of_dep.department_id), 20)
+                         || Rpad(City_of_dep(rows_of_dep.department_id), 20)
+                         || Count_for_emp(rows_of_dep.department_id));
+END LOOP;
+END; 
+
+-------------------------------------------
+costliest emp
+
+DECLARE
+    CURSOR department_cur IS
+      SELECT department_id,
+             department_name,
+             Max(salary) maxsalary
+      FROM   employees
+             join departments USING (department_id)
+      GROUP  BY department_id,
+                department_name;
+    emp_first_name employees.first_name%TYPE;
+BEGIN
+dbms_output.Put_line('------------------------------------------------------------');
+
+dbms_output.Put_line(Rpad('Name of the Department', 35)
+                     ||Rpad('First Name', 25));
+
+dbms_output.Put_line('------------------------------------------------------------');
+
+FOR emp_dept_cur IN department_cur LOOP
+    BEGIN
+        SELECT first_name
+        INTO   emp_first_name
+        FROM   employees
+        WHERE  department_id = emp_dept_cur.department_id
+               AND salary = emp_dept_cur.maxsalary;
+
+        dbms_output.Put_line(Rpad(emp_dept_cur.department_name, 35)
+                             || Rpad(emp_first_name, 25));
+    EXCEPTION
+        WHEN too_many_rows THEN
+          dbms_output.Put_line(Rpad(emp_dept_cur.department_name, 35)
+                               || ' - More than one employee');
+    END;
+END LOOP;
+END; 
+/
+
+
+
